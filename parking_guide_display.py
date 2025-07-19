@@ -75,7 +75,11 @@ class ParkingGuideDisplay:
         effective_progress = 0.0 if tof_is_error else current_progress_percent
 
         # --- Determine Display State ---
-        is_phase2_active = effective_progress >= self.config.get('CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT', 75.0)
+        # DYNAMIC THRESHOLD: Calculate the zoom transition point as a percentage
+        # of the way to the target, not as a static percentage of the whole bar.
+        zoom_config_pct = self.config.get('CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT', 75.0)
+        dynamic_zoom_threshold = (zoom_config_pct / 100.0) * derived_target_pct
+        is_phase2_active = effective_progress >= dynamic_zoom_threshold
 
         pattern_details = self._get_pattern_display_details(
             effective_progress, is_phase2_active, derived_target_pct
@@ -338,7 +342,12 @@ class ParkingGuideDisplay:
         if total_cols == 0 or not pattern_details: return
 
         cfg = self.config
-        is_phase2 = current_slider_pct >= cfg['CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT']
+        
+        # DYNAMIC THRESHOLD: Use the same logic as the update() method to determine
+        # the current phase, ensuring consistency.
+        zoom_config_pct = cfg.get('CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT', 75.0)
+        dynamic_zoom_threshold = (zoom_config_pct / 100.0) * derived_target_pct
+        is_phase2 = current_slider_pct >= dynamic_zoom_threshold
         
         colors = ["off"] * total_cols
         
@@ -434,9 +443,14 @@ class ParkingGuideDisplay:
     # --- Private Color Logic Helpers ---
     
     def _calculate_phase1_slider_color_change_threshold(self, center_marker_pct, derived_target_pct):
+        """
+        This calculation was already dynamic. It calculates the threshold as a
+        percentage of the distance to the target marker.
+        """
         change_point_pct = self.config['CONFIG_SLIDER_COLOR_CHANGE_POINT_TARGET_PCT']
         if center_marker_pct != -1 and not isinstance(change_point_pct, str):
             return max(0.0, (change_point_pct / 100.0) * center_marker_pct)
+        # Fallback if the main marker isn't set for some reason
         return (50.0 / 100.0) * derived_target_pct
 
     def _get_current_progress_color(self, current_slider_pct, is_phase2, p1_color_thresh_pct, pattern_details):
