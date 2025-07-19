@@ -58,9 +58,9 @@ class Sensors:
         # --- ToF Distance Sensor ---
         self.tof_sensor = adafruit_vl53l1x.VL53L1X(i2c_bus)
         self.tof_sensor.distance_mode = 2
-        self.tof_sensor.timing_budget = 50
+        self.tof_sensor.timing_budget = 200
         self.tof_current_mode = 2  # 1 for Short, 2 for Long
-        self.tof_switch_threshold_cm = 130.0
+        self.tof_switch_threshold_cm = 90.0
 
         # --- Light Sensor ---
         self.light_sensor = None
@@ -91,6 +91,9 @@ class Sensors:
                     self.tof_sensor.distance_mode = 2
                     self.tof_current_mode = 2
                 return distance
+            if distance is None:
+                self.tof_sensor.distance_mode = 2
+                self.tof_current_mode = 2
         return None
 
     def get_light_level(self):
@@ -105,9 +108,9 @@ class Sensors:
 # --- Configuration Dictionaries ---
 # =================================================================
 display_configs = {
-    "UPPER_RANGE_CM": 190.0, "MAX_MATRICES": 4,
+    "UPPER_RANGE_CM": 180.0, "MAX_MATRICES": 4,
     "POSSIBLE_ADDRESSES": [0x70, 0x71, 0x72, 0x73], "BRIGHTNESS_LEVEL": 1.0,
-    "MATRIX_COLUMNS_PER_UNIT": 8, "NEOPIXEL_NUM_LEDS": 11,
+    "MATRIX_COLUMNS_PER_UNIT": 8, "NEOPIXEL_NUM_LEDS": 12,
     "NEOPIXEL_PIXEL_ORDER": "GRB", "NEOPIXEL_OE_PIN": board.GP17,
     "NEOPIXEL_USE_OE_PIN": True, "TOF_READING_ERROR": -1.0,
     "FLOAT_COMPARISON_TOLERANCE": 0.0001, "PHASE2_MIN_COLS_PER_ONE_PERCENT": 0.1,
@@ -127,10 +130,10 @@ display_configs = {
 app_configs = {
     # State Machine Configs
     "ENABLE_SCORING": True, # NEW: Enable/disable the score display
-    "SIGNIFICANT_LIGHT_CHANGE_LUX": 5,
-    "STABLE_DISTANCE_DURATION_S": 5, # Reduced for easier testing
+    "SIGNIFICANT_LIGHT_CHANGE_LUX": 3,
+    "STABLE_DISTANCE_DURATION_S": 30, # Reduced for easier testing
     "ACTIVE_RANGING_DURATION_S": 180,
-    "IDLE_AFTER_PARKING_DURATION_S": 180,
+    "IDLE_AFTER_PARKING_DURATION_S": 120,
     "LIGHT_MONITOR_INTERVAL_S": 3,
     "CALIBRATION_SAMPLES": 5,
     "CALIBRATION_COUNTDOWN_S": 5,
@@ -296,6 +299,7 @@ def main():
             elif state == "ACTIVE_RANGING":
                 sensor_manager.start_ranging()
                 current_distance = sensor_manager.get_distance()
+                print(current_distance, sensor_manager.tof_current_mode)#DEBUG HERE
                 if current_distance is not None:
                     last_known_distance = current_distance
                 guide_display.update(current_distance, target_distance)
@@ -344,7 +348,7 @@ def main():
                     state = "MONITORING_LIGHT"
                     last_lux_reading = sensor_manager.get_light_level() or 0
 
-            time.sleep(0.05)
+            time.sleep(sensor_manager.tof_sensor.timing_budget/1000)
 
     except KeyboardInterrupt:
         print("\nCtrl+C detected.")
