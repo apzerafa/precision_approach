@@ -58,7 +58,7 @@ class Sensors:
         # --- ToF Distance Sensor ---
         self.tof_sensor = adafruit_vl53l1x.VL53L1X(i2c_bus)
         self.tof_sensor.distance_mode = 2
-        self.tof_sensor.timing_budget = 200
+        self.tof_sensor.timing_budget = 100
         self.tof_current_mode = 2  # 1 for Short, 2 for Long
         self.tof_switch_threshold_cm = 90.0
 
@@ -117,9 +117,9 @@ display_configs = {
     "ROUNDING_OFFSET": 0.5, "CONFIG_PHASE1_PADDING_COLS": 2,
     "CONFIG_LEFT_STATIC_COLOR": "green", "CONFIG_CENTER_STATIC_COLOR": "off",
     "CONFIG_RIGHT_STATIC_COLOR": "green", 
-    "CONFIG_PHASE2_STATIC_MARKER_OFFSET_PCT": 3.0,
-    "CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT": 75.0,
-    "CONFIG_PHASE2_COLS_PER_ONE_PERCENT": 2.0, "CONFIG_PRECISE_INDICATOR_COLOR": "yellow",
+    "CONFIG_PHASE2_STATIC_MARKER_OFFSET_PCT": 1.0,
+    "CONFIG_ZOOM_TRANSITION_THRESHOLD_PERCENT": 85.0,
+    "CONFIG_PHASE2_COLS_PER_ONE_PERCENT": 4.0, "CONFIG_PRECISE_INDICATOR_COLOR": "yellow",
     "CONFIG_SLIDER_START_COLOR": "green", "CONFIG_SLIDER_END_COLOR_PHASE1": "yellow",
     "CONFIG_SLIDER_COLOR_CHANGE_POINT_TARGET_PCT": 65.0,
     "CONFIG_RECOLOR_BETWEEN_STATIC_BEHAVIOR": "use_slider_color",
@@ -130,7 +130,7 @@ display_configs = {
 app_configs = {
     # State Machine Configs
     "ENABLE_SCORING": True, # NEW: Enable/disable the score display
-    "SIGNIFICANT_LIGHT_CHANGE_LUX": 3,
+    "SIGNIFICANT_LIGHT_CHANGE_LUX": 1,
     "STABLE_DISTANCE_DURATION_S": 30, # Reduced for easier testing
     "ACTIVE_RANGING_DURATION_S": 180,
     "IDLE_AFTER_PARKING_DURATION_S": 120,
@@ -339,12 +339,28 @@ def main():
                 state = "IDLE_COOLDOWN"
 
             elif state == "IDLE_COOLDOWN":
-                guide_display.clear()
                 sensor_manager.stop_ranging()
+                guide_display.set_neopixels("off") # Turn off neopixels during cooldown count
+
                 if now - last_log_time > app_configs["CONSOLE_LOG_INTERVAL_S"]:
-                    print(f"In cooldown... Resuming monitoring in {app_configs['IDLE_AFTER_PARKING_DURATION_S'] - (now - state_enter_time):.0f}s")
+                    total_cooldown = app_configs["IDLE_AFTER_PARKING_DURATION_S"]
+                    elapsed_time = now - state_enter_time
+                    remaining_time = total_cooldown - elapsed_time
+                    
+                    # Calculate the digit to display (9 down to 0)
+                    if total_cooldown > 0:
+                        # Calculate percentage of time remaining and scale to 0-9
+                        percent_remaining = max(0, remaining_time / total_cooldown)
+                        display_digit = int(percent_remaining * 10)
+                        # Clamp the value to ensure it's between 0 and 9
+                        display_digit = min(9, max(0, display_digit))
+                        guide_display.show_idle_cooldown(display_digit)
+                    
+                    print(f"In cooldown... Resuming monitoring in {remaining_time:.0f}s")
                     last_log_time = now
+                
                 if now - state_enter_time > app_configs["IDLE_AFTER_PARKING_DURATION_S"]:
+                    guide_display.clear() # Clear the final digit before switching state
                     state = "MONITORING_LIGHT"
                     last_lux_reading = sensor_manager.get_light_level() or 0
 
